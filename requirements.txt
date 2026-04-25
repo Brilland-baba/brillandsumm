@@ -1,6 +1,6 @@
-streamlit
-transformers
-torch
-httpx
-sentencepiece
-sacremoses
+streamlit>=1.35.0
+transformers==4.40.2
+torch==2.11.0
+httpx>=0.27.0
+sentencepiece>=0.2.0
+sacremoses>=0.1.1
