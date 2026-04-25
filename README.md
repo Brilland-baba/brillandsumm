@@ -1,4 +1,4 @@
-# 🧠 BrillandSumm — Résumeur Automatique d'Articles de Presse
+#  BrillandSumm — Résumeur Automatique d'Articles de Presse
 
 <div align="center">
 
