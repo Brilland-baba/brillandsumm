@@ -178,17 +178,17 @@ div[data-testid="stTabs"] button {
 def load_models():
     models = {}
     models["bart"] = pipeline(
-        "summarization", model="facebook/bart-large-cnn",
-        device=-1, truncation=True
+        task="summarization", model="facebook/bart-large-cnn",
+        device=-1, truncation=True, framework="pt"
     )
     models["t5"] = pipeline(
-        "summarization", model="t5-base",
-        device=-1, truncation=True
+        task="summarization", model="t5-base",
+        device=-1, truncation=True, framework="pt"
     )
     try:
         models["t5fr"] = pipeline(
-            "summarization", model="plguillou/t5-base-fr-sum-cnndm",
-            device=-1, truncation=True
+            task="summarization", model="plguillou/t5-base-fr-sum-cnndm",
+            device=-1, truncation=True, framework="pt"
         )
     except Exception:
         models["t5fr"] = models["t5"]
