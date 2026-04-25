@@ -20,7 +20,7 @@
 | **Professeur** | Gracieux HOUNNA, Ing, ISE |
 | **Institut** | ENEAM — École Nationale d'Économie Appliquée et de Management |
 | **Matière** | Traitement Naturel du Langage (NLP/NLU) |
-| **Année académique** | 2024 – 2025 |
+| **Année académique** | 2025 – 2026 |
 | **Application** | BrillandSumm v2.0 |
 
 ---
@@ -159,7 +159,7 @@ curl -X POST http://localhost:8000/summarize/text \
 git init
 git add app.py requirements.txt README.md
 git commit -m "feat: BrillandSumm v2.0 - résumeur NLP BART+T5 - BABA C.F. Brilland - ENEAM"
-git remote add origin https://github.com/TON_USERNAME/brillandsumm.git
+git remote add origin https://github.com//Brilland-baba/brillandsumm.git
 git branch -M main
 git push -u origin main
 ```
@@ -187,7 +187,7 @@ EXPOSE 7860
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
 ```
 
-Lien live : `https://huggingface.co/spaces/TON_USERNAME/BrillandSumm`
+Lien live : `https://huggingface.co/spaces//Brilland-baba/BrillandSumm`
 
 ---
 
@@ -221,7 +221,7 @@ Lien live : `https://huggingface.co/spaces/TON_USERNAME/BrillandSumm`
 
 | Livrable | Lien |
 |---|---|
-| 🔗 Code source GitHub | `https://github.com/TON_USERNAME/brillandsumm` |
+| 🔗 Code source GitHub | `https://github.com//Brilland-baba/brillandsumm` |
 | 🌐 Plateforme live | `https://brillandsumm.onrender.com` |
 | 📄 Rapport PDF | `rapport.pdf` (1 page) |
 
@@ -239,10 +239,10 @@ Lien live : `https://huggingface.co/spaces/TON_USERNAME/BrillandSumm`
 
 **ENEAM — École Nationale d'Économie Appliquée et de Management**
 
-*Matière : Traitement Naturel du Langage (NLP/NLU) — 2024-2025*
+*Matière : Traitement Naturel du Langage (NLP/NLU) — 2025-2026*
 
 ---
 
-> *"L'intelligence artificielle au service de la compréhension de l'information."*
+> *"La Data Science au service de la compréhension de l'information."*
 
 </div>
