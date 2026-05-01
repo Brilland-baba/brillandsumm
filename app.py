@@ -1,58 +1,160 @@
 """
+================================================================================
 BrillandSumm v2.0 - Résumeur Automatique d'Articles de Presse
+================================================================================
+
 Auteur   : BABA C.F. Brilland
-Prof     : Gracieux HOUNNA, Ing, ISE
-Institut : ENEAM
+Professeur : Gracieux HOUNNA, Ing, ISE
+Institut : ENEAM (École Nationale d'Économie Appliquée et de Management)
 Matière  : Traitement Naturel du Langage (NLP/NLU)
 Modèles  : BART (facebook/bart-large-cnn) + T5 (t5-base) — Hugging Face
+
+Fonctionnalités :
+----------------
+1. Résumé de texte brut via API ou interface web
+2. Extraction et résumé d'articles depuis une URL
+3. Chatbot intelligent pour les requêtes de résumé
+4. Interface web moderne avec sélection de modèles
+5. Support multilingue (anglais + français avec T5-FR)
+
+Technologies utilisées :
+-----------------------
+- FastAPI : Framework web asynchrone
+- Transformers (Hugging Face) : Modèles NLP pré-entraînés
+- Pydantic : Validation des données
+- Uvicorn : Serveur ASGI
+
+================================================================================
 """
 
-# ── CRITIQUE : bloquer TensorFlow AVANT tout import transformers ──
+
+
+# ============================================================================
+# CONFIGURATION CRITIQUE - Blocage de TensorFlow
+# ============================================================================
+# Ces variables d'environnement doivent être définies AVANT l'import de transformers
+# Pour éviter les conflits entre TensorFlow et PyTorch, on force l'utilisation de PyTorch
 import os
-os.environ["USE_TF"] = "0"
-os.environ["USE_TORCH"] = "1"
-os.environ["TRANSFORMERS_NO_TF"] = "1"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-# ─────────────────────────────────────────────────────────────────
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import httpx, re, time, warnings
-from transformers import pipeline
-import uvicorn
+# Désactiver complètement TensorFlow
 
+os.environ["USE_TF"] = "0"              # Interdire l'utilisation de TensorFlow
+os.environ["USE_TORCH"] = "1"           # Forcer l'utilisation de PyTorch
+os.environ["TRANSFORMERS_NO_TF"] = "1"  # Désactiver les modèles TensorFlow dans transformers
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Réduire les logs de TensorFlow
+
+
+
+
+
+# ============================================================================
+# IMPORTS DES BIBLIOTHÈQUES
+# ============================================================================
+from fastapi import FastAPI, HTTPException      # Framework web et gestion d'erreurs
+from fastapi.responses import HTMLResponse      # Envoi de réponses HTML
+from fastapi.middleware.cors import CORSMiddleware  # Gestion du CORS pour l'API
+from pydantic import BaseModel                  # Validation des schémas de données
+import httpx                                    # Client HTTP pour les requêtes externes
+import re                                       # Expressions régulières pour le parsing HTML
+import time                                     # Mesure des performances
+import warnings                                 # Gestion des avertissements
+from transformers import pipeline               # Pipeline Hugging Face pour l'inférence
+import uvicorn                                  # Serveur ASGI
+
+# Supprimer les avertissements superflus pour une sortie plus propre
 warnings.filterwarnings("ignore")
 
-# ─────────────────────────────────────────────
-# Chargement des deux modèles UNE SEULE FOIS
-# ─────────────────────────────────────────────
-print("⏳ Chargement de BART EN (facebook/bart-large-cnn)...")
+
+
+
+
+# ============================================================================
+# CHARGEMENT DES MODÈLES D'IA (UNE SEULE FOIS AU DÉMARRAGE)
+# ============================================================================
+
+
+print("=" * 80)
+print("BrillandSumm v2.0 - Initialisation des modèles NLP")
+print("=" * 80)
+
+
+# Dictionnaire global pour stocker les modèles chargés
 MODELS = {}
-MODELS["bart"] = pipeline("summarization", model="facebook/bart-large-cnn",
-                           device=-1, truncation=True)
-print("✅ BART EN prêt !")
 
-print("⏳ Chargement de T5 (t5-base)...")
-MODELS["t5"] = pipeline("summarization", model="t5-base",
-                         device=-1, truncation=True)
-print("✅ T5 prêt !")
 
-print("⏳ Chargement de T5 FR (plguillou/t5-base-fr-sum-cnndm)...")
+
+
+# ----------------------------------------------------------------------------
+# Modèle 1 : BART (Bidirectional and Auto-Regressive Transformer)
+# Modèle pré-entraîné sur CNN/DailyMail pour le résumé abstractif en anglais
+# Points forts : excellent pour les articles longs, résumé fluide et naturel
+# ----------------------------------------------------------------------------
+
+
+print("⏳ [1/3] Chargement de BART EN (facebook/bart-large-cnn)...")
+MODELS["bart"] = pipeline(
+    "summarization",                    # Tâche de résumé automatique
+    model="facebook/bart-large-cnn",    # Modèle pré-entraîné
+    device=-1,                          # -1 = CPU, 0+ = GPU (si disponible)
+    truncation=True                     # Troncature automatique des textes longs
+)
+print("✅ [1/3] BART EN prêt !")
+
+
+
+
+# ----------------------------------------------------------------------------
+# Modèle 2 : T5 (Text-to-Text Transfer Transformer)
+# Modèle générique de Google, plus léger que BART
+# Nécessite le préfixe "summarize: " devant le texte
+# ----------------------------------------------------------------------------
+print("⏳ [2/3] Chargement de T5 (t5-base)...")
+MODELS["t5"] = pipeline(
+    "summarization",
+    model="t5-base",                    # Version de base du modèle T5
+    device=-1,
+    truncation=True
+)
+print("✅ [2/3] T5 prêt !")
+
+
+
+# ----------------------------------------------------------------------------
+# Modèle 3 : T5 Français (optionnel)
+# Version fine-tunée de T5 spécifiquement pour le français
+# Si le téléchargement échoue, on utilise T5 anglais comme fallback
+# ----------------------------------------------------------------------------
+
+
+print("⏳ [3/3] Chargement de T5 FR (plguillou/t5-base-fr-sum-cnndm)...")
 try:
-    MODELS["t5fr"] = pipeline("summarization", model="plguillou/t5-base-fr-sum-cnndm",
-                               device=-1, truncation=True)
-    print("✅ T5 FR prêt !")
+    MODELS["t5fr"] = pipeline(
+        "summarization",
+        model="plguillou/t5-base-fr-sum-cnndm",
+        device=-1,
+        truncation=True
+    )
+    print("✅ [3/3] T5 FR prêt !")
 except Exception as e:
-    print(f"⚠️ T5 FR non disponible : {e}")
-    MODELS["t5fr"] = MODELS["t5"]  # fallback
+    print(f"⚠️ [3/3] T5 FR non disponible : {e}")
+    MODELS["t5fr"] = MODELS["t5"]  # Fallback vers T5 anglais
+    print("   → Utilisation de T5 anglais comme alternative")
 
-print("🚀 BrillandSumm v2.0 — BART EN + T5 + T5 FR opérationnels !")
+print("=" * 80)
+print("🚀 BrillandSumm v2.0 opérationnel !")
+print("   Modèles disponibles : BART EN, T5 EN, T5 FR")
+print("=" * 80)
+print()
 
-# ─────────────────────────────────────────────
-# Application FastAPI
-# ─────────────────────────────────────────────
+
+
+
+# ============================================================================
+# CONFIGURATION DE L'APPLICATION FASTAPI
+# ============================================================================
+
+
+
 app = FastAPI(
     title="BrillandSumm — Résumeur Automatique d'Articles de Presse",
     description="Résumeur automatique NLP/NLU — BART & T5 FR — ENEAM | BABA C.F. Brilland",
@@ -61,9 +163,13 @@ app = FastAPI(
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
-# ─────────────────────────────────────────────
-# Schémas Pydantic
-# ─────────────────────────────────────────────
+
+# ============================================================================
+# SCHÉMAS PYDANTIC (Validation des données)
+# ============================================================================
+
+
+
 class TextRequest(BaseModel):
     text: str
     model: str = "bart"
@@ -82,7 +188,35 @@ class ChatRequest(BaseModel):
 # ─────────────────────────────────────────────
 # Extraction texte depuis URL
 # ─────────────────────────────────────────────
+
 def extract_text_from_url(url: str) -> str:
+    """
+    Extrait et nettoie le texte principal d'un article à partir de son URL
+    
+    Paramètres :
+    -----------
+    url : str
+        URL de l'article à analyser
+    
+    Retourne :
+    --------
+    str : Texte extrait et nettoyé (max 4500 caractères)
+    
+    Lève :
+    -----
+    HTTPException : Si l'URL est inaccessible ou le texte extrait trop court
+    
+    Processus :
+    ----------
+    1. Télécharge le contenu HTML de l'URL
+    2. Pour Wikipedia : cible spécifiquement la zone de contenu principal
+    3. Supprime les balises inutiles (script, style, navigation, etc.)
+    4. Nettoie les entités HTML
+    5. Filtre les lignes trop courtes (moins de 60 caractères)
+    6. Limite à 4500 caractères pour les performances
+    """
+    # En-têtes HTTP pour simuler un navigateur réel
+
     headers = {"User-Agent": "Mozilla/5.0 (BrillandSumm/2.0)"}
     try:
         r = httpx.get(url, headers=headers, timeout=12, follow_redirects=True)
@@ -104,16 +238,28 @@ def extract_text_from_url(url: str) -> str:
     for tag in ["script", "style", "nav", "header", "footer", "figure", "aside", "table"]:
         html = re.sub(rf"<{tag}[^>]*>.*?</{tag}>", " ", html, flags=re.DOTALL | re.IGNORECASE)
 
+        # Suppression de toutes les balises HTML restantes
+
     text = re.sub(r"<[^>]+>", " ", html)
+
+    # Remplacement des entités HTML par des espaces
+
     text = re.sub(r"&[a-z#0-9]+;", " ", text)
 
-    # Garder seulement les phrases longues (ignorer menus et labels courts)
+    # Filtrage  :: Garder seulement les phrases longues (ignorer menus et labels courts)
     lines = [l.strip() for l in text.splitlines() if len(l.strip()) > 60]
     text = " ".join(lines)
+
+       # Nettoyage final : espaces multiples → un seul espace
+
     text = re.sub(r"\s+", " ", text).strip()
+
+        # Vérification de la qualité de l'extraction
 
     if len(text) < 80:
         raise HTTPException(422, "Texte extrait trop court ou page protégée.")
+        # Limitation pour les performances des modèles
+
     return text[:4500]
 
 # ─────────────────────────────────────────────
@@ -121,9 +267,48 @@ def extract_text_from_url(url: str) -> str:
 # ─────────────────────────────────────────────
 def run_summarizer(text: str, model_key: str,
                    max_length: int, min_length: int) -> dict:
+    
+
+    """
+    Exécute le résumé avec le modèle spécifié
+    
+    Paramètres :
+    -----------
+    text : str
+        Texte source à résumer
+    model_key : str
+        Clé du modèle ('bart', 't5', 't5fr')
+    max_length : int
+        Longueur maximale du résumé
+    min_length : int
+        Longueur minimale du résumé
+    
+    Retourne :
+    --------
+    dict : Dictionnaire contenant :
+        - summary : Texte du résumé généré
+        - model_used : Nom du modèle utilisé
+        - original_words : Nombre de mots dans le texte original
+        - summary_words : Nombre de mots dans le résumé
+        - compression_ratio : Taux de compression (%)
+        - processing_time_sec : Temps de calcul en secondes
+    
+    Notes :
+    ------
+    - Pour T5, ajoute automatiquement le préfixe "summarize: "
+    - Limite la longueur du texte d'entrée pour les performances
+    """
+    # Vérification que le modèle demandé existe
+
     if model_key not in MODELS:
         raise HTTPException(400, f"Modèle inconnu : {model_key}. Choisir 'bart' ou 't5'.")
+
+       # Formatage spécial pour T5 : nécessite le préfixe "summarize:"
+
     input_text = f"summarize: {text}" if model_key in ("t5", "t5fr") else text
+
+       # Mesure des performances
+
     t0 = time.perf_counter()
     result = MODELS[model_key](
         input_text,
@@ -142,14 +327,36 @@ def run_summarizer(text: str, model_key: str,
         "processing_time_sec": elapsed,
     }
 
-# ─────────────────────────────────────────────
-# Routes API
-# ─────────────────────────────────────────────
+
+
+
+# ============================================================================
+# ROUTES DE L'API REST
+# ============================================================================
+
+
+
 @app.post("/summarize/text", summary="Résumer un texte brut (BART ou T5)")
 def summarize_text(req: TextRequest):
-    if len(req.text.strip()) < 50:
+     
+
+     """
+    Endpoint pour résumer un texte fourni directement
+    
+    Exemple d'utilisation :
+    POST /summarize/text
+    {
+        "text": "Long article text here...",
+        "model": "bart",
+        "max_length": 180,
+        "min_length": 50
+    }
+    """
+    # Validation basique de la longueur du texte
+
+     if len(req.text.strip()) < 50:
         raise HTTPException(422, "Texte trop court (min 50 caractères).")
-    return run_summarizer(req.text[:4500], req.model, req.max_length, req.min_length)
+     return run_summarizer(req.text[:4500], req.model, req.max_length, req.min_length)
 
 @app.post("/summarize/url", summary="Résumer un article via URL (BART ou T5)")
 def summarize_url(req: UrlRequest):
@@ -162,8 +369,25 @@ def health():
 
 @app.post("/chat", summary="Chatbot pour résumé")
 def chat_endpoint(req: ChatRequest):
-    message = req.message.strip()
-    if message.lower().startswith("summarize"):
+     
+
+     """
+    Endpoint chatbot qui comprend les commandes naturelles
+    
+    Commandes supportées :
+    ---------------------
+    1. "summarize [texte]" - Résume le texte fourni
+    2. "summarize url [url]" - Résume l'article à l'URL donnée
+    3. Autres messages - Réponse informative du chatbot
+    
+    Exemples :
+    ---------
+    - "summarize Natural language processing is a field of AI that focuses..."
+    - "summarize url https://en.wikipedia.org/wiki/Transformer"
+    - "Hello, what can you do?"
+    """
+     message = req.message.strip()
+     if message.lower().startswith("summarize"):
         parts = message[9:].strip().split(" ", 1)
         if len(parts) > 0 and parts[0].lower() == "url":
             if len(parts) > 1:
@@ -178,12 +402,24 @@ def chat_endpoint(req: ChatRequest):
                 return run_summarizer(text, "bart", 180, 50)
             else:
                 return {"response": "Please provide text to summarize after 'summarize'."}
-    else:
+     else:
         return {"response": "Hello! I'm BrillandBot. I can summarize text or articles. Try:\n- summarize [your text]\n- summarize url [url]"}
 
-# ─────────────────────────────────────────────
-# Interface Web (HTML/CSS/JS intégré)
-# ─────────────────────────────────────────────
+
+
+# ============================================================================
+# INTERFACE WEB (HTML/CSS/JS intégré)
+# ============================================================================
+# L'interface utilisateur est entièrement intégrée dans le code HTML ci-dessous
+# Elle offre :
+# - Sélection du modèle (BART/T5/T5 FR)
+# - Choix du mode (texte brut / URL / chatbot)
+# - Ajustement de la longueur du résumé
+# - Visualisation des statistiques de compression
+# - Mode conversationnel pour les requêtes naturelles
+
+
+
 HTML_PAGE = r"""<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -515,15 +751,68 @@ async function sendChat(){
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return HTML_PAGE
+        """
+    Point d'entrée principal - Interface utilisateur web
+    Retourne la page HTML complète avec l'interface de résumé
+    """
+        return HTML_PAGE
+
+
+
+# ============================================================================
+# POINT D'ENTRÉE PRINCIPAL
+# ============================================================================
+
 
 if __name__ == "__main__":
+    """
+    Lancement du serveur Uvicorn avec configuration optimisée
+    
+    Configuration :
+    --------------
+    - Host: 0.0.0.0 (écoute sur toutes les interfaces réseau)
+    - Port: Recherche automatique d'un port libre entre 8000 et 8009
+    - Reload: Désactivé pour les performances (réactiver en développement)
+    - Workers: 1 (optimisé pour les modèles chargés en mémoire)
+    """
     import socket
+
+        # Recherche automatique d'un port disponible
+
     port = 8000
     for p in range(8000, 8010):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             if sock.connect_ex(("localhost", p)) != 0:
                 port = p
                 break
-    print(f"\n🌐 Ouvrir dans le navigateur : http://localhost:{port}\n")
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=False, workers=1)
+    
+    
+    
+    print("\n" + "=" * 80)
+    print("🚀 BRILLANDSUMM V2.0 - DÉMARRAGE DU SERVEUR")
+    print("=" * 80)
+    print(f"📡 Serveur HTTP : http://localhost:{port}")
+    print(f"🔗 Interface web : http://localhost:{port}/")
+    print(f"📚 Documentation API : http://localhost:{port}/docs")
+    print(f"🩺 Vérification santé : http://localhost:{port}/health")
+    print("\n⚙️ Configuration :")
+    print(f"   • Modèles chargés : {len(MODELS)}")
+    print(f"   • Modèles disponibles : BART, T5, T5 Français")
+    print(f"   • Platforme : CPU (device=-1)")
+    print("\n💡 Commandes utiles :")
+    print(f"   • CTRL+C : Arrêter le serveur")
+    print(f"   • Ouvrir http://localhost:{port} dans le navigateur")
+    print("\n📝 Notes :")
+    print("   • Premier chargement peut prendre 20-30 secondes")
+    print("   • T5 FR peut nécessiter un téléchargement initial")
+    print("=" * 80)
+    print()
+    
+    # Lancement du serveur
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=port, 
+        reload=False,      # Off pour production (meilleures performances)
+        workers=1          # 1 worker car modèles lourds en mémoire
+    )
