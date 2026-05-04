@@ -69,7 +69,7 @@ warnings.filterwarnings("ignore")
 
 
 # ============================================================================
-# CHARGEMENT DES MODÈLES D'IA (UNE SEULE FOIS AU DÉMARRAGE)
+# CHARGEMENT DES MODÈLES (UNE SEULE FOIS AU DÉMARRAGE)
 # ============================================================================
 
 
